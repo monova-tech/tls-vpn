@@ -1,3 +1,4 @@
+pub mod helpers;
 pub mod logging;
 pub mod nat;
 pub mod protocol;
