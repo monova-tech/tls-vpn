@@ -441,7 +441,6 @@ impl Nat {
             &source_ipv4_addr,
             &destination_ipv4_addr,
         );
-        mutable_udp_packet.set_checksum(0);
         mutable_udp_packet.set_checksum(checksum);
         Ok(())
     }
@@ -941,7 +940,10 @@ impl Nat {
 
                 if last_activity.elapsed() > *expiry_duration {
                     let result = self.clear_mapping(Some(&original_metadata), None);
-                    let error_message = format!("{:?} port freed? {:}.", protocol, result);
+                    let error_message = format!(
+                        "{:?} port original {:?} freed? {:}.",
+                        protocol, original_metadata.source_port, result
+                    );
                     crate::logging::debug(&error_message);
                 }
             }
