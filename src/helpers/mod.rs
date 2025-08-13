@@ -1,5 +1,6 @@
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
+use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 use pnet::packet::{Packet, ipv4};
@@ -80,10 +81,75 @@ pub fn validate_ipv4_packet(ip_packet: &[u8]) -> bool {
     }
 }
 
+pub fn validate_ipv6_packet(ip_packet: &[u8]) -> bool {
+    let ip_packet = match Ipv6Packet::new(ip_packet) {
+        Some(packet) => packet,
+        None => {
+            crate::logging::debug(format!(
+                "Validation failed. Invalid packet {:?}.",
+                ip_packet
+            ));
+            return false;
+        }
+    };
+
+    match ip_packet.get_next_header() {
+        IpNextHeaderProtocols::Tcp => {
+            let tcp_packet = match TcpPacket::new(ip_packet.payload()) {
+                Some(packet) => packet,
+                None => {
+                    crate::logging::debug(format!(
+                        "Invalid TCP checksum. Invalid packet {:?}.",
+                        ip_packet
+                    ));
+                    return false;
+                }
+            };
+
+            let calculated_tcp_checksum = tcp::ipv6_checksum(
+                &tcp_packet,
+                &ip_packet.get_source(),
+                &ip_packet.get_destination(),
+            );
+            return tcp_packet.get_checksum() == calculated_tcp_checksum;
+        }
+
+        IpNextHeaderProtocols::Udp => {
+            let udp_packet = match UdpPacket::new(ip_packet.payload()) {
+                Some(packet) => packet,
+                None => {
+                    crate::logging::debug(format!(
+                        "Invalid UDP checksum. Invalid packet {:?}.",
+                        ip_packet
+                    ));
+                    return false;
+                }
+            };
+
+            let calculated_udp_checksum = udp::ipv6_checksum(
+                &udp_packet,
+                &ip_packet.get_source(),
+                &ip_packet.get_destination(),
+            );
+            return udp_packet.get_checksum() == calculated_udp_checksum;
+        }
+
+        _ => {
+            crate::logging::debug(format!(
+                "Validation failed. Unhandled protocol {:?}.",
+                ip_packet
+            ));
+            return false;
+        }
+    }
+}
+
 pub fn validate_packet(ip_packet: &[u8]) -> bool {
     let version = ip_packet[0] >> 4;
     if version == 4 {
         return validate_ipv4_packet(ip_packet);
+    } else if version == 6 {
+        return validate_ipv6_packet(ip_packet);
     }
 
     true
